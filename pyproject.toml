@@ -1,0 +1,8 @@
+[project]
+name = "foundry-bootcamp"
+version = "0.1.0"
+description = "Python environment for the Microsoft Foundry bootcamp."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "agent-framework>=1.23.0",
+]
