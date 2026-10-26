@@ -1,8 +1,31 @@
 # Foundry Bootcamp Template
 
-A minimal starting point for the bootcamp: provision **one empty Azure resource
-group**, then build agents using Microsoft Agent Framework for Python.
-No Foundry projects, models, or other Azure services are deployed.
+A generic starting point for the bootcamp: provision **an Azure resource group
+with a Microsoft Foundry account and project**, then build agents using
+Microsoft Agent Framework for Python. No models or scenario-specific services
+are deployed.
+
+## Workshop structure
+
+The folder layout follows [David's MicroHack](https://github.com/dsanchor/fraud-intelligence-microhack),
+without its fraud-specific content.
+
+```text
+labautomation/                  # Platform hooks and shared Foundry infrastructure
+challenges/
+|-- challenge-01.md              # Participant-facing challenge template
+`-- finish.md                    # Wrap-up and cleanup
+walkthrough/
+`-- challenge-01/
+    `-- solution-01.md           # Matching solution template and future assets
+```
+
+Start with the [challenge template](challenges/challenge-01.md) and its
+[solution template](walkthrough/challenge-01/solution-01.md). Both are authoring
+scaffolds, not completed exercises. Duplicate the pair when adding challenges,
+keeping their numbering and navigation links aligned.
+
+For managed events, see [lab automation](labautomation/README.md).
 
 ## Development environment
 
@@ -30,7 +53,9 @@ for framework usage.
 Sign in using `az login` (or `az login --use-device-code` in a headless
 environment). Your account needs subscription-level permissions to create
 resource groups and deployments, such as the **Contributor** role.
-Provisioning always uses the root `main.bicep` at subscription scope.
+Standalone provisioning uses the root `main.bicep` at subscription scope, which
+creates the group and calls the shared `labautomation/main.bicep` template.
+The region must support Microsoft Foundry accounts and projects.
 
 **Bash** (Linux, macOS, or WSL):
 
@@ -50,7 +75,11 @@ Provisioning always uses the root `main.bicep` at subscription scope.
 
 The default region is `westeurope`. Without a subscription argument, the scripts
 use your current Azure CLI subscription. They never change that CLI default.
-The deployment prints the resource group's name, ID, and location.
+The deployment prints the resource group's name, ID, and location, plus the
+Foundry account name, project name, and project API endpoint. The account name
+is stable for the resource-group ID. Authentication uses Microsoft Entra ID;
+local API keys are disabled. No additional role assignments are created:
+assign an appropriate Foundry data-plane role before running agent exercises.
 
 Both scripts generate `rg-foundry-bootcamp-<8-character-random-suffix>` and share
 the suffix stored in `.provision/suffix`. Reruns in the same subscription reuse
@@ -58,7 +87,9 @@ that group, even when switching shells. Preserve this ignored file when moving
 between machines or recreating a Codespace if you want to reuse the same group.
 Using another subscription creates the same group name in that subscription.
 Do not change the region on reruns: Azure cannot move an existing resource group
-to another region.
+to another region. Foundry resources also stay in their original deployment
+region. Region fallback for managed events is handled separately by the
+platform hooks.
 
 ## Cleanup
 
@@ -71,14 +102,20 @@ az group delete --name rg-foundry-bootcamp-<your-suffix> --subscription "<subscr
 This deletes **all resources in the group**, including anything added during the
 bootcamp. Keep `.provision/suffix` to reuse the name later. Remove that file
 only when you intentionally want the next run to create a differently named
-group; removing it does not delete Azure resources.
+group; removing it does not delete Azure resources. Foundry accounts are
+soft-deleted and may require recovery or purging before their names can be
+reused; follow Azure's error guidance if redeployment reports a name conflict.
 
 ## Local checks
 
 ```bash
 python3 -m unittest discover -s tests -v
 az bicep build --file main.bicep --stdout
+az bicep build --file labautomation/main.bicep --stdout
 ```
 
 The script tests use a mocked Azure CLI and temporary state; they do not deploy
 Azure resources. They test Bash plus PowerShell when `pwsh` is installed.
+Hook tests mock the MicroHack platform and Azure PowerShell commands. Template
+tests also compile both deployment paths when the standalone `bicep` CLI is
+available. They do not validate live Azure permissions, capacity, or deployment.

@@ -21,6 +21,8 @@ class ProvisionTests(unittest.TestCase):
         for name in ("provision.sh", "provision.ps1", "main.bicep"):
             if (ROOT / name).exists():
                 shutil.copy2(ROOT / name, self.project / name)
+        if (ROOT / "labautomation").exists():
+            shutil.copytree(ROOT / "labautomation", self.project / "labautomation")
         self.bin = self.directory / "bin"
         self.bin.mkdir()
         self.log = self.directory / "az.jsonl"
