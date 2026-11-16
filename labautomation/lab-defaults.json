@@ -3,7 +3,7 @@
   "groups": [],
   "deploymentType": "resourcegroup",
   "labsPerSubscription": 5,
-  "preferredLocation": "westeurope",
-  "estimatedDailyCostsUsd": 1.0,
+  "preferredLocation": "westeurope, swedencentral, francecentral",
+  "estimatedDailyCostsUsd": 5.0,
   "estimatedSharedDeploymentDailyCostsUsd": 0.0
 }

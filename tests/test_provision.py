@@ -3,12 +3,15 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SHELLS = ["bash"] + (["pwsh"] if shutil.which("pwsh") else [])
+SHELLS = (["bash"] if os.name != "nt" and shutil.which("bash") else []) + (
+    ["pwsh"] if shutil.which("pwsh") else []
+)
 
 
 class ProvisionTests(unittest.TestCase):
@@ -36,7 +39,7 @@ class ProvisionTests(unittest.TestCase):
             "    if os.environ.get('AZ_FAIL') == 'auth':\n"
             "        print('Please run az login.', file=sys.stderr)\n"
             "        sys.exit(1)\n"
-            "elif sys.argv[1:4] == ['deployment', 'sub', 'create']:\n"
+            "elif sys.argv[1:2] == ['run']:\n"
             "    if os.environ.get('AZ_FAIL') == 'deploy':\n"
             "        print('Deployment failed.', file=sys.stderr)\n"
             "        sys.exit(1)\n"
@@ -46,6 +49,12 @@ class ProvisionTests(unittest.TestCase):
             "    sys.exit(2)\n"
         )
         fake_az.chmod(0o755)
+        shutil.copy2(fake_az, self.bin / "uv")
+        if os.name == "nt":
+            for name in ("az", "uv"):
+                (self.bin / f"{name}.cmd").write_text(
+                    f'@"{sys.executable}" "{fake_az}" %*\n'
+                )
         self.env = {
             **os.environ,
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
@@ -84,17 +93,15 @@ class ProvisionTests(unittest.TestCase):
                 result = self.run_script(shell)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(self.suffix(), suffix)
-        deployments = [call for call in self.calls() if call[:3] == [
-            "deployment", "sub", "create"
-        ]]
+        deployments = [call for call in self.calls() if call[:1] == ["run"]]
         self.assertEqual(len(deployments), 2 * len(SHELLS))
         for call in deployments:
             self.assertEqual(call[call.index("--location") + 1], "westeurope")
             self.assertEqual(
-                Path(call[call.index("--template-file") + 1]),
-                self.project / "main.bicep",
+                Path(call[call.index("python") + 1]).resolve(),
+                (self.project / "labautomation/environment.py").resolve(),
             )
-            self.assertIn(f"suffix={self.suffix()}", call)
+            self.assertEqual(call[call.index("--suffix") + 1], self.suffix())
 
     def test_forwards_location_and_subscription_without_changing_defaults(self):
         for shell in SHELLS:
@@ -108,13 +115,12 @@ class ProvisionTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
         for call in self.calls():
             self.assertEqual(call[call.index("--subscription") + 1], "test-sub")
-            if call[:3] == ["deployment", "sub", "create"]:
-                self.assertIn("location=swedencentral", call)
+            if call[:1] == ["run"]:
                 self.assertEqual(
                     call[call.index("--location") + 1], "swedencentral"
                 )
 
-    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell is not installed")
+    @unittest.skipUnless("pwsh" in SHELLS and "bash" in SHELLS, "Both shells are required")
     def test_powershell_generated_suffix_is_reused_by_bash(self):
         result = self.run_script("pwsh")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -158,9 +164,19 @@ class ProvisionTests(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("suffix", result.stderr.lower())
                     self.assertEqual(state.read_text(), value)
-        self.assertFalse(any(call[:3] == [
-            "deployment", "sub", "create"
-        ] for call in self.calls()))
+        self.assertFalse(any(call[:1] == ["run"] for call in self.calls()))
+
+    def test_forwards_principal_and_local_dataset(self):
+        for shell in SHELLS:
+            args = (["--principal-id", "participant", "--dataset-csv", "tickets.csv"]
+                    if shell == "bash"
+                    else ["-PrincipalId", "participant", "-DatasetCsv", "tickets.csv"])
+            result = self.run_script(shell, *args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        for call in self.calls():
+            if call[:1] == ["run"]:
+                self.assertEqual(call[call.index("--principal-id") + 1], "participant")
+                self.assertEqual(call[call.index("--dataset-csv") + 1], "tickets.csv")
 
     def test_invalid_arguments_do_not_deploy(self):
         for shell in SHELLS:

@@ -18,8 +18,24 @@ if ((Get-AzContext).Subscription.Id -ne $SubscriptionId) {
     throw "The active Azure context must match subscription '$SubscriptionId'."
 }
 
-$provider = Get-AzResourceProvider -ProviderNamespace 'Microsoft.CognitiveServices' -ErrorAction Stop
-if ($provider.RegistrationState -notcontains 'Registered') {
-    Write-Host "Registering Microsoft.CognitiveServices in subscription '$SubscriptionId'."
-    Register-AzResourceProvider -ProviderNamespace 'Microsoft.CognitiveServices' -ErrorAction Stop | Out-Null
+foreach ($namespace in @(
+    'Microsoft.CognitiveServices', 'Microsoft.Search', 'Microsoft.Storage',
+    'Microsoft.Insights', 'Microsoft.OperationalInsights'
+)) {
+    $provider = Get-AzResourceProvider -ProviderNamespace $namespace -ErrorAction Stop
+    if ($provider.RegistrationState -notcontains 'Registered') {
+        Write-Host "Registering $namespace in subscription '$SubscriptionId'."
+        Register-AzResourceProvider -ProviderNamespace $namespace -ErrorAction Stop | Out-Null
+        $deadline = [DateTime]::UtcNow.AddMinutes(10)
+        do {
+            $provider = Get-AzResourceProvider -ProviderNamespace $namespace -ErrorAction Stop
+            if ($provider.RegistrationState -contains 'Registered') {
+                break
+            }
+            if ([DateTime]::UtcNow -ge $deadline) {
+                throw "Timed out waiting for $namespace registration."
+            }
+            Start-Sleep -Seconds 10
+        } while ($true)
+    }
 }
