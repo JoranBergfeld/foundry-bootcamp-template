@@ -1,121 +1,62 @@
 # Foundry Bootcamp Template
 
-A generic starting point for the bootcamp: provision **an Azure resource group
-with a Microsoft Foundry account and project**, then build agents using
-Microsoft Agent Framework for Python. No models or scenario-specific services
-are deployed.
+Create your own hands-on AI workshop with **Microsoft Foundry** and
+**Microsoft Agent Framework for Python**. This template provides a ready-to-deploy
+Azure lab, a searchable IT support dataset, and paired challenge and solution
+templates you can adapt to your scenario.
 
-## Workshop structure
+## Use this template
 
-The folder layout follows [David's MicroHack](https://github.com/dsanchor/fraud-intelligence-microhack),
-without its fraud-specific content.
+1. Select **Use this template > Create a new repository** on GitHub.
+2. Open your new repository in **GitHub Codespaces**, or clone it and reopen it
+   in a **VS Code Dev Container** (Docker required locally).
+3. Sign in to Azure with `az login`, then run `./provision.sh` or, in
+   PowerShell 7, `./provision.ps1` from the repository root.
+4. Customize the [first challenge](challenges/challenge-01.md) and its
+   [solution](walkthrough/challenge-01/solution-01.md), then update this README
+   with your workshop's title, audience, and agenda.
 
-```text
-labautomation/                  # Platform hooks and shared Foundry infrastructure
-challenges/
-|-- challenge-01.md              # Participant-facing challenge template
-`-- finish.md                    # Wrap-up and cleanup
-walkthrough/
-`-- challenge-01/
-    `-- solution-01.md           # Matching solution template and future assets
-```
+Your Azure account needs permission to create resource groups, resources, and
+role assignments. Review the [setup and deployment guide](docs/setup.md) for
+prerequisites, subscription selection, participant access, and cleanup.
+Provisioned resources incur Azure charges; new deployments can briefly use
+capacity in three regions while selecting one lab.
 
-Start with the [challenge template](challenges/challenge-01.md) and its
-[solution template](walkthrough/challenge-01/solution-01.md). Both are authoring
-scaffolds, not completed exercises. Duplicate the pair when adding challenges,
-keeping their numbering and navigation links aligned.
+## What's included
 
-For managed events, see [lab automation](labautomation/README.md).
+| Component | Purpose |
+| --- | --- |
+| Microsoft Foundry account and project | Foundation for your agent exercises |
+| Azure AI Search | Full-text search over 100,000 IT support tickets |
+| Blob Storage | Source CSV and dataset attribution |
+| Application Insights and Log Analytics | Application telemetry and diagnostics |
+| Python devcontainer | Python 3.13, uv, Agent Framework, Azure CLI, Bicep, and PowerShell |
+| Workshop scaffolds | Participant challenges, matching solutions, and a wrap-up page |
+| MicroHack hooks | Optional per-participant provisioning for managed events |
 
-## Development environment
+Services use Entra authentication, with access assigned to the principals you
+supply (the signed-in deployment identity by default). **No models or completed
+agent exercises are included.** Add model deployments and exercise code to suit
+your workshop.
 
-Open this repository in VS Code with the **Dev Containers** extension and choose
-**Dev Containers: Reopen in Container**, or open it in GitHub Codespaces.
-Local devcontainers require Docker.
+The [IT Support Tickets dataset](https://www.kaggle.com/datasets/ahsanneural/synthetic-it-support-tickets)
+is by Muhammad Ahsan and licensed under **CC BY 4.0**. Provisioning downloads
+version 1 and preserves attribution alongside the source data.
 
-The container includes Python 3.13, uv, Azure CLI, Bicep, and PowerShell.
-Container creation runs `uv sync --locked` to install Microsoft Agent Framework
-into `.venv`. VS Code uses that environment automatically.
+## Make it your own
 
-Without a devcontainer, install Python 3.13, [uv](https://docs.astral.sh/uv/),
-[Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), and Bicep
-(`az bicep install`), then run `uv sync --locked`. PowerShell 7 is required only
-for the PowerShell provisioning script.
+Keep participant instructions in `challenges/` and matching solutions and assets
+in `walkthrough/`. Duplicate the numbered challenge/solution pair for each
+exercise, update navigation links, and adapt the [wrap-up page](challenges/finish.md).
+The supplied pages are authoring scaffolds, not finished participant exercises.
 
-Use `uv run python` for bootcamp exercises. The lockfile captures the latest
-stable `agent-framework` release available when this template was created. To
-upgrade later, run `uv lock --upgrade && uv sync --locked` and commit `uv.lock`.
-See the [official Python guide](https://github.com/microsoft/agent-framework/tree/main/python)
-for framework usage.
+Shared Azure resources and permissions live in `labautomation/main.bicep`.
+Both standalone provisioning and the managed-event hooks use that template.
+Keep downloaded data, credentials, and local deployment state out of Git.
 
-## Provision
+## Guides
 
-Sign in using `az login` (or `az login --use-device-code` in a headless
-environment). Your account needs subscription-level permissions to create
-resource groups and deployments, such as the **Contributor** role.
-Standalone provisioning uses the root `main.bicep` at subscription scope, which
-creates the group and calls the shared `labautomation/main.bicep` template.
-The region must support Microsoft Foundry accounts and projects.
-
-**Bash** (Linux, macOS, or WSL):
-
-```bash
-./provision.sh
-# Optional overrides:
-./provision.sh --subscription "<subscription-id-or-name>" --location swedencentral
-```
-
-**PowerShell 7**:
-
-```powershell
-./provision.ps1
-# Optional overrides:
-./provision.ps1 -Subscription "<subscription-id-or-name>" -Location swedencentral
-```
-
-The default region is `westeurope`. Without a subscription argument, the scripts
-use your current Azure CLI subscription. They never change that CLI default.
-The deployment prints the resource group's name, ID, and location, plus the
-Foundry account name, project name, and project API endpoint. The account name
-is stable for the resource-group ID. Authentication uses Microsoft Entra ID;
-local API keys are disabled. No additional role assignments are created:
-assign an appropriate Foundry data-plane role before running agent exercises.
-
-Both scripts generate `rg-foundry-bootcamp-<8-character-random-suffix>` and share
-the suffix stored in `.provision/suffix`. Reruns in the same subscription reuse
-that group, even when switching shells. Preserve this ignored file when moving
-between machines or recreating a Codespace if you want to reuse the same group.
-Using another subscription creates the same group name in that subscription.
-Do not change the region on reruns: Azure cannot move an existing resource group
-to another region. Foundry resources also stay in their original deployment
-region. Region fallback for managed events is handled separately by the
-platform hooks.
-
-## Cleanup
-
-Delete the group when finished, substituting its printed name:
-
-```bash
-az group delete --name rg-foundry-bootcamp-<your-suffix> --subscription "<subscription-id>"
-```
-
-This deletes **all resources in the group**, including anything added during the
-bootcamp. Keep `.provision/suffix` to reuse the name later. Remove that file
-only when you intentionally want the next run to create a differently named
-group; removing it does not delete Azure resources. Foundry accounts are
-soft-deleted and may require recovery or purging before their names can be
-reused; follow Azure's error guidance if redeployment reports a name conflict.
-
-## Local checks
-
-```bash
-python3 -m unittest discover -s tests -v
-az bicep build --file main.bicep --stdout
-az bicep build --file labautomation/main.bicep --stdout
-```
-
-The script tests use a mocked Azure CLI and temporary state; they do not deploy
-Azure resources. They test Bash plus PowerShell when `pwsh` is installed.
-Hook tests mock the MicroHack platform and Azure PowerShell commands. Template
-tests also compile both deployment paths when the standalone `bicep` CLI is
-available. They do not validate live Azure permissions, capacity, or deployment.
+- [Setup, deployment, permissions, dataset loading, and cleanup](docs/setup.md)
+- [Managed events and MicroHack platform integration](labautomation/README.md)
+- [Local checks](docs/setup.md#local-checks)
+- [Microsoft Agent Framework for Python](https://github.com/microsoft/agent-framework/tree/main/python)

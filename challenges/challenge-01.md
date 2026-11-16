@@ -12,7 +12,7 @@ State what participants will build or learn and how they will demonstrate it.
 ## Context and Background
 
 Introduce the scenario, the problem to solve, and the concepts participants
-need. List prerequisites and reference the [lab setup](../labautomation/README.md).
+need. List prerequisites and reference the [lab setup](../docs/setup.md).
 
 ## Tasks
 

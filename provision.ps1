@@ -4,7 +4,11 @@ param(
     [string]$Location = 'westeurope',
 
     [ValidateNotNullOrEmpty()]
-    [string]$Subscription
+    [string]$Subscription,
+
+    [string[]]$PrincipalId = @(),
+
+    [string]$DatasetCsv
 )
 
 Set-StrictMode -Version Latest
@@ -12,6 +16,9 @@ $ErrorActionPreference = 'Stop'
 
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw 'Azure CLI is required. Reopen this project in its devcontainer or install Azure CLI.'
+}
+if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+    throw 'uv is required. Reopen this project in its devcontainer or install uv.'
 }
 
 $subscriptionArgs = @()
@@ -39,17 +46,21 @@ if ($suffix -cnotmatch '^[0-9a-f]{8}$') {
     throw "Invalid suffix in ${suffixFile}; expected eight lowercase hexadecimal characters. Restore the original suffix to reuse your resource group."
 }
 
-Write-Host "Provisioning rg-foundry-bootcamp-$suffix in $Location"
 $deploymentArgs = @(
-    'deployment', 'sub', 'create'
-    '--name', "foundry-bootcamp-$suffix"
-    '--location', $Location
-    '--template-file', (Join-Path $PSScriptRoot 'main.bicep')
-    '--parameters', "location=$Location", "suffix=$suffix"
-    '--query', 'properties.outputs'
-    '--output', 'json'
+    'run', '--no-project', '--python', '3.13', 'python'
+    (Join-Path $PSScriptRoot 'labautomation/environment.py')
+    'provision', '--suffix', $suffix, '--location', $Location
 )
-& az @deploymentArgs @subscriptionArgs
+if ($Subscription) {
+    $deploymentArgs += @('--subscription', $Subscription)
+}
+foreach ($id in $PrincipalId) {
+    $deploymentArgs += @('--principal-id', $id)
+}
+if ($DatasetCsv) {
+    $deploymentArgs += @('--dataset-csv', $DatasetCsv)
+}
+& uv @deploymentArgs
 if ($LASTEXITCODE -ne 0) {
     throw 'Deployment failed. Resolve the Azure CLI error above and rerun this script.'
 }

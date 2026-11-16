@@ -2,23 +2,26 @@
 set -euo pipefail
 
 usage() {
-    printf 'Usage: %s [--location REGION] [--subscription ID_OR_NAME]\n' "$0"
+    printf 'Usage: %s [--location REGION] [--subscription ID_OR_NAME] [--principal-id OBJECT_ID] [--dataset-csv PATH]\n' "$0"
 }
 
 location="westeurope"
 subscription=""
+extra_args=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --location|--subscription)
+        --location|--subscription|--principal-id|--dataset-csv)
             if [[ $# -lt 2 || -z "$2" || "$2" == -* ]]; then
                 printf 'Error: %s requires a value.\n' "$1" >&2
                 exit 1
             fi
             if [[ "$1" == "--location" ]]; then
                 location="$2"
-            else
+            elif [[ "$1" == "--subscription" ]]; then
                 subscription="$2"
+            else
+                extra_args+=("$1" "$2")
             fi
             shift 2
             ;;
@@ -36,6 +39,10 @@ done
 
 if ! command -v az >/dev/null 2>&1; then
     printf 'Error: Azure CLI is required. Reopen this project in its devcontainer or install Azure CLI.\n' >&2
+    exit 1
+fi
+if ! command -v uv >/dev/null 2>&1; then
+    printf 'Error: uv is required. Reopen this project in its devcontainer or install uv.\n' >&2
     exit 1
 fi
 
@@ -65,17 +72,13 @@ if [[ ! "$suffix" =~ ^[0-9a-f]{8}$ ]]; then
     exit 1
 fi
 
-printf 'Provisioning rg-foundry-bootcamp-%s in %s\n' "$suffix" "$location"
 deployment_args=(
-    deployment sub create
-    --name "foundry-bootcamp-$suffix"
+    run --no-project --python 3.13 python "$script_dir/labautomation/environment.py"
+    provision --suffix "$suffix"
     --location "$location"
-    --template-file "$script_dir/main.bicep"
-    --parameters "location=$location" "suffix=$suffix"
-    --query properties.outputs
-    --output json
+    "${extra_args[@]}"
 )
 if [[ -n "$subscription" ]]; then
     deployment_args+=(--subscription "$subscription")
 fi
-az "${deployment_args[@]}"
+uv "${deployment_args[@]}"

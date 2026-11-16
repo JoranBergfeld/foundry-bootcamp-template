@@ -25,6 +25,7 @@ class LabAutomationTests(unittest.TestCase):
         command = r"""
 $ErrorActionPreference = 'Stop'
 $global:calls = [System.Collections.Generic.List[object]]::new()
+$global:registered = @{}
 function Get-AzContext {
     @{ Subscription = @{ Id = 'test-sub' } }
 }
@@ -32,6 +33,11 @@ function Get-MhhStableHash {
     param([string[]]$Values, [int]$Length)
     $global:calls.Add(@{ kind = 'hash'; values = $Values; length = $Length })
     '0123456789ab'
+}
+function Update-MhhToken {}
+function python3 {
+    $global:calls.Add(@{ kind = 'seed'; arguments = $args })
+    $global:LASTEXITCODE = $(if ($env:HOOK_FAILURE -eq 'seed') { 1 } else { 0 })
 }
 function Invoke-MhhDeploymentWithRegionFallback {
     param($PreferredLocations, $ResourceGroupName, $RgOwnerEntraObjectIds,
@@ -45,17 +51,26 @@ function Invoke-MhhDeploymentWithRegionFallback {
     @{
         Success = $true
         LocationUsed = 'swedencentral'
+        DeploymentName = 'foundry-bootcamp-test'
         Outputs = @{
             foundryAccountName = 'aif-test'
             foundryProjectName = 'bootcamp'
             foundryProjectEndpoint = 'https://aif-test.services.ai.azure.com/api/projects/bootcamp'
+            searchServiceName = 'srch-test'
+            searchEndpoint = 'https://srch-test.search.windows.net'
+            searchIndexName = 'it-support-tickets'
+            storageAccountName = 'sttest'
+            datasetContainerName = 'it-support-tickets'
+            applicationInsightsName = 'appi-test'
+            logAnalyticsWorkspaceName = 'log-test'
         }
     }
 }
 function Get-AzResourceProvider {
     param($ProviderNamespace)
     $global:calls.Add(@{ kind = 'get-provider'; provider = $ProviderNamespace })
-    @{ RegistrationState = $(if ($env:HOOK_FAILURE -in @('unregistered', 'register')) {
+    @{ RegistrationState = $(if ($env:HOOK_FAILURE -in @('unregistered', 'register') -and
+                                -not $global:registered.ContainsKey($ProviderNamespace)) {
         'NotRegistered'
     } else { 'Registered' }) }
 }
@@ -63,6 +78,7 @@ function Register-AzResourceProvider {
     param($ProviderNamespace)
     $global:calls.Add(@{ kind = 'register-provider'; provider = $ProviderNamespace })
     if ($env:HOOK_FAILURE -eq 'register') { throw 'Registration failed' }
+    $global:registered[$ProviderNamespace] = $true
 }
 try {
     $parameters = $env:HOOK_PARAMETERS | ConvertFrom-Json -AsHashtable
@@ -103,6 +119,11 @@ try {
                     Path(deployment["template"]), ROOT / "labautomation/main.bicep"
                 )
                 self.assertNotIn("location", deployment["parameters"])
+                self.assertEqual(deployment["parameters"]["principalIds"],
+                                 ["participant-1", "participant-2"])
+                seed = next(c for c in data["calls"] if c["kind"] == "seed")
+                self.assertIn("foundry-bootcamp-test", seed["arguments"])
+                self.assertIn("participant-rg", seed["arguments"])
                 credentials = {
                     c["HackboxCredential"]["name"]: c["HackboxCredential"]["value"]
                     for c in data["credentials"]
@@ -114,6 +135,13 @@ try {
                     "FoundryProjectName": "bootcamp",
                     "FoundryProjectEndpoint":
                         "https://aif-test.services.ai.azure.com/api/projects/bootcamp",
+                    "searchServiceName": "srch-test",
+                    "searchEndpoint": "https://srch-test.search.windows.net",
+                    "searchIndexName": "it-support-tickets",
+                    "storageAccountName": "sttest",
+                    "datasetContainerName": "it-support-tickets",
+                    "applicationInsightsName": "appi-test",
+                    "logAnalyticsWorkspaceName": "log-test",
                 })
 
     def test_subscription_scope_derives_stable_participant_group(self):
@@ -147,7 +175,7 @@ try {
         result, data = self.run_hook(PreferredLocation=[])
         self.assertEqual(result.returncode, 0, data)
         deployment = next(c for c in data["calls"] if c["kind"] == "deploy")
-        self.assertEqual(deployment["regions"], ["westeurope"])
+        self.assertEqual(deployment["regions"], ["westeurope", "swedencentral", "francecentral"])
 
     def test_failed_deployment_does_not_publish_credentials(self):
         result, data = self.run_hook(failure="deploy")
@@ -155,15 +183,22 @@ try {
         self.assertIn("Deployment failed", data["error"])
         self.assertNotIn("credentials", data)
 
-    def test_shared_hook_registers_only_foundry_provider(self):
+    def test_failed_ingestion_does_not_publish_credentials(self):
+        result, data = self.run_hook(failure="seed")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ingestion failed", data["error"])
+        self.assertNotIn("credentials", data)
+
+    def test_shared_hook_registers_all_required_providers(self):
         result, data = self.run_hook(
             hook="shared-deploy-lab.ps1", failure="unregistered"
         )
         self.assertEqual(result.returncode, 0, data)
         registrations = [c for c in data["calls"] if c["kind"] == "register-provider"]
-        self.assertEqual(registrations, [
-            {"kind": "register-provider", "provider": "Microsoft.CognitiveServices"}
-        ])
+        self.assertEqual({c["provider"] for c in registrations}, {
+            "Microsoft.CognitiveServices", "Microsoft.Search", "Microsoft.Storage",
+            "Microsoft.Insights", "Microsoft.OperationalInsights",
+        })
         self.assertEqual(data["credentials"], [])
 
     def test_shared_hook_skips_registered_provider(self):
@@ -188,11 +223,14 @@ try {
         self.assertNotIn("credentials", data)
 
 
-@unittest.skipUnless(shutil.which("bicep"), "Bicep CLI is not installed")
+@unittest.skipUnless(shutil.which("bicep") or shutil.which("az"), "Bicep CLI is not installed")
 class FoundryTemplateTests(unittest.TestCase):
     def compile(self, path):
+        cli = [shutil.which("bicep"), "build"] if shutil.which("bicep") else [
+            shutil.which("az"), "bicep", "build", "--file"
+        ]
         result = subprocess.run(
-            ["bicep", "build", str(ROOT / path), "--stdout"],
+            [*cli, str(ROOT / path), "--stdout"],
             capture_output=True, text=True, timeout=60,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -203,6 +241,14 @@ class FoundryTemplateTests(unittest.TestCase):
         self.assertEqual(set(resources), {
             "Microsoft.CognitiveServices/accounts",
             "Microsoft.CognitiveServices/accounts/projects",
+            "Microsoft.CognitiveServices/accounts/projects/connections",
+            "Microsoft.Search/searchServices",
+            "Microsoft.Storage/storageAccounts",
+            "Microsoft.Storage/storageAccounts/blobServices",
+            "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "Microsoft.OperationalInsights/workspaces",
+            "Microsoft.Insights/components",
+            "Microsoft.Authorization/roleAssignments",
         })
         account = resources["Microsoft.CognitiveServices/accounts"]
         self.assertEqual(account["kind"], "AIServices")
@@ -210,11 +256,20 @@ class FoundryTemplateTests(unittest.TestCase):
         self.assertTrue(account["properties"]["allowProjectManagement"])
         self.assertTrue(account["properties"]["disableLocalAuth"])
         self.assertIn("customSubDomainName", account["properties"])
-        self.assertEqual(set(template["outputs"]), {
-            "foundryAccountName", "foundryProjectName", "foundryProjectEndpoint"
-        })
+        self.assertTrue(resources["Microsoft.Search/searchServices"]["properties"]["disableLocalAuth"])
+        self.assertFalse(resources["Microsoft.Storage/storageAccounts"]["properties"]["allowSharedKeyAccess"])
+        connections = [r for r in template["resources"]
+                       if r["type"] == "Microsoft.CognitiveServices/accounts/projects/connections"]
+        self.assertEqual({r["properties"]["category"] for r in connections},
+                         {"CognitiveSearch", "AzureBlob", "AppInsights"})
+        self.assertTrue({"foundryAccountName", "foundryProjectName", "foundryProjectEndpoint",
+                         "searchEndpoint", "storageAccountName", "applicationInsightsName",
+                         "datasetContainerName"} <= set(template["outputs"]))
+        roles = [r for r in template["resources"] if r["type"] == "Microsoft.Authorization/roleAssignments"]
+        self.assertTrue(any("parameters('principalIds')" in json.dumps(r) or
+                            "variables('operators')" in json.dumps(r) for r in roles))
 
-    def test_lab_template_deploys_only_account_and_project(self):
+    def test_lab_template_deploys_complete_environment(self):
         template = self.compile("labautomation/main.bicep")
         self.assert_foundry_resources(template)
         self.assertEqual(

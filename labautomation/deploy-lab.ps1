@@ -32,7 +32,11 @@ if ($DeploymentType -eq 'subscription') {
     throw "ResourceGroupName is required for deployment type '$DeploymentType'."
 }
 if ($PreferredLocation.Count -eq 0) {
-    $PreferredLocation = @('westeurope')
+    $PreferredLocation = @('westeurope', 'swedencentral', 'francecentral')
+}
+$python = Get-Command python3, python -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $python) {
+    throw 'Python 3 is required to load the IT Support Tickets dataset.'
 }
 
 $result = Invoke-MhhDeploymentWithRegionFallback `
@@ -40,8 +44,16 @@ $result = Invoke-MhhDeploymentWithRegionFallback `
     -ResourceGroupName $ResourceGroupName `
     -RgOwnerEntraObjectIds $AllowedEntraUserIds `
     -TemplateFile (Join-Path $PSScriptRoot 'main.bicep') `
-    -TemplateParameterObject @{} `
+    -TemplateParameterObject @{ principalIds = $AllowedEntraUserIds } `
     -DeploymentNamePrefix 'foundry-bootcamp'
+
+Update-MhhToken | Out-Null
+& $python (Join-Path $PSScriptRoot 'environment.py') seed `
+    --subscription $SubscriptionId --resource-group $ResourceGroupName `
+    --deployment-name $result.DeploymentName
+if ($LASTEXITCODE -ne 0) {
+    throw 'IT Support Tickets ingestion failed; no lab credentials will be published.'
+}
 
 @{ HackboxCredential = @{
     name = 'ResourceGroupName'; value = $ResourceGroupName; note = 'Bootcamp resource group'
@@ -58,3 +70,11 @@ $result = Invoke-MhhDeploymentWithRegionFallback `
 @{ HackboxCredential = @{
     name = 'FoundryProjectEndpoint'; value = $result.Outputs.foundryProjectEndpoint; note = 'Project API endpoint'
 } }
+foreach ($name in @(
+    'searchServiceName', 'searchEndpoint', 'searchIndexName', 'storageAccountName',
+    'datasetContainerName', 'applicationInsightsName', 'logAnalyticsWorkspaceName'
+)) {
+    @{ HackboxCredential = @{
+        name = $name; value = $result.Outputs[$name]; note = 'Bootcamp resource'
+    } }
+}
