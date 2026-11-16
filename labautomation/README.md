@@ -21,7 +21,7 @@ labautomation/
 
 From the repository root, run `./provision.sh` or `./provision.ps1`.
 The root `main.bicep` creates a resource group and deploys this folder's
-`main.bicep` into it. See [provisioning instructions](../README.md#provision).
+`main.bicep` into it. See [provisioning instructions](../docs/setup.md#provision).
 Keep both templates together when distributing the repository.
 
 ## MicroHack platform deployment
@@ -30,8 +30,8 @@ The platform reads `lab-defaults.json`, prepares participant scopes and access,
 then runs `shared-deploy-lab.ps1` once per subscription. This hook requests
 registration of `Microsoft.CognitiveServices`, `Microsoft.Search`,
 `Microsoft.Storage`, `Microsoft.Insights`, and `Microsoft.OperationalInsights`
-if needed. Add future shared
-preparation here; do not publish participant secrets from this hook.
+if needed. Add shared preparation here; do not publish participant secrets
+from this hook.
 
 The platform then invokes `deploy-lab.ps1` once per participant, with an
 authenticated Azure context and its helper commands already loaded. These hooks
@@ -63,7 +63,8 @@ The default ordered regions are `westeurope`, `swedencentral`, and `francecentra
 The platform's helper classifies capacity/quota/unsupported-region failures and
 tries another region; non-retryable failures stop. The platform owns a single
 participant group, so its attempts stay sequential. The standalone scripts race
-three regions in parallel and delete the extras, as described in the root README.
+three regions in parallel and delete the extras; see
+[regional provisioning](../docs/setup.md#provision).
 
 **Region fallback can delete and recreate the participant resource group.**
 Use these hooks only for disposable lab groups, not groups containing unrelated
@@ -77,7 +78,7 @@ follow the Azure error guidance before retrying.
   pin it in the platform hook, which would defeat region fallback.
 - The default is resource-group ownership, not subscription ownership; no license
   groups are requested. Participant roles and Foundry/Search identity permissions
-  are defined in Bicep. See [resources and access](../README.md#resources-and-access).
+  are defined in Bicep. See [resources and access](../docs/setup.md#resources-and-access).
 - Foundry/Search use Entra authentication with local keys disabled. Storage
   shared keys and public blobs are disabled. The importer retries propagation
   delays and transient failures with bounded waits.
@@ -88,7 +89,6 @@ follow the Azure error guidance before retrying.
   Foundry account and project; soft-deleted accounts may remain recoverable.
 
 See the [MicroHack platform contract](https://github.com/microsoft/MicroHack/blob/main/99-MicroHack-Template/labautomation/README.md)
-for helper commands and hook requirements. Folder organization follows
-[David's MicroHack](https://github.com/dsanchor/fraud-intelligence-microhack);
-the scenario data is [IT Support Tickets](../README.md#it-support-tickets-dataset),
+for helper commands and hook requirements.
+The scenario data is [IT Support Tickets](../docs/setup.md#it-support-tickets-dataset),
 by Muhammad Ahsan, licensed CC BY 4.0. Keep attribution with dataset copies.

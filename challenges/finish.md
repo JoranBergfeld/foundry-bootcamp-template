@@ -9,7 +9,7 @@ Replace this authoring guidance when publishing your challenges.
 
 ## Cleanup
 
-For standalone provisioning, follow the [cleanup instructions](../README.md#cleanup).
+For standalone provisioning, follow the [cleanup instructions](../docs/setup.md#cleanup).
 For managed events, follow the organizer's lab lifecycle instructions.
 Deleting a lab resource group removes every resource inside it.
 

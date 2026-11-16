@@ -19,7 +19,7 @@ Explain design decisions, prerequisites, and assumptions.
 ### 1. Define the starting point
 
 Document the exact setup and required configuration. Reference the
-[lab setup](../../labautomation/README.md) instead of duplicating provisioning.
+[lab setup](../../docs/setup.md) instead of duplicating provisioning.
 
 ### 2. Complete the exercise
 

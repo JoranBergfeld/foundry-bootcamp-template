@@ -1,183 +1,62 @@
 # Foundry Bootcamp Template
 
-Provision **Microsoft Foundry, Azure AI Search, Application Insights and Blob
-Storage**, with a searchable IT support dataset, then build agents using
-Microsoft Agent Framework for Python. No models are deployed.
+Create your own hands-on AI workshop with **Microsoft Foundry** and
+**Microsoft Agent Framework for Python**. This template provides a ready-to-deploy
+Azure lab, a searchable IT support dataset, and paired challenge and solution
+templates you can adapt to your scenario.
 
-## Workshop structure
+## Use this template
 
-The folder layout follows [David's MicroHack](https://github.com/dsanchor/fraud-intelligence-microhack),
-without its fraud-specific content.
+1. Select **Use this template > Create a new repository** on GitHub.
+2. Open your new repository in **GitHub Codespaces**, or clone it and reopen it
+   in a **VS Code Dev Container** (Docker required locally).
+3. Sign in to Azure with `az login`, then run `./provision.sh` or, in
+   PowerShell 7, `./provision.ps1` from the repository root.
+4. Customize the [first challenge](challenges/challenge-01.md) and its
+   [solution](walkthrough/challenge-01/solution-01.md), then update this README
+   with your workshop's title, audience, and agenda.
 
-```text
-labautomation/                  # Platform hooks and shared Foundry infrastructure
-challenges/
-|-- challenge-01.md              # Participant-facing challenge template
-`-- finish.md                    # Wrap-up and cleanup
-walkthrough/
-`-- challenge-01/
-    `-- solution-01.md           # Matching solution template and future assets
-```
+Your Azure account needs permission to create resource groups, resources, and
+role assignments. Review the [setup and deployment guide](docs/setup.md) for
+prerequisites, subscription selection, participant access, and cleanup.
+Provisioned resources incur Azure charges; new deployments can briefly use
+capacity in three regions while selecting one lab.
 
-Start with the [challenge template](challenges/challenge-01.md) and its
-[solution template](walkthrough/challenge-01/solution-01.md). Both are authoring
-scaffolds, not completed exercises. Duplicate the pair when adding challenges,
-keeping their numbering and navigation links aligned.
+## What's included
 
-For managed events, see [lab automation](labautomation/README.md).
+| Component | Purpose |
+| --- | --- |
+| Microsoft Foundry account and project | Foundation for your agent exercises |
+| Azure AI Search | Full-text search over 100,000 IT support tickets |
+| Blob Storage | Source CSV and dataset attribution |
+| Application Insights and Log Analytics | Application telemetry and diagnostics |
+| Python devcontainer | Python 3.13, uv, Agent Framework, Azure CLI, Bicep, and PowerShell |
+| Workshop scaffolds | Participant challenges, matching solutions, and a wrap-up page |
+| MicroHack hooks | Optional per-participant provisioning for managed events |
 
-## Development environment
+Services use Entra authentication, with access assigned to the principals you
+supply (the signed-in deployment identity by default). **No models or completed
+agent exercises are included.** Add model deployments and exercise code to suit
+your workshop.
 
-Open this repository in VS Code with the **Dev Containers** extension and choose
-**Dev Containers: Reopen in Container**, or open it in GitHub Codespaces.
-Local devcontainers require Docker.
+The [IT Support Tickets dataset](https://www.kaggle.com/datasets/ahsanneural/synthetic-it-support-tickets)
+is by Muhammad Ahsan and licensed under **CC BY 4.0**. Provisioning downloads
+version 1 and preserves attribution alongside the source data.
 
-The container includes Python 3.13, uv, Azure CLI, Bicep, and PowerShell.
-Container creation runs `uv sync --locked` to install Microsoft Agent Framework
-into `.venv`. VS Code uses that environment automatically.
+## Make it your own
 
-Without a devcontainer, install Python 3.13, [uv](https://docs.astral.sh/uv/),
-[Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), and Bicep
-(`az bicep install`), then run `uv sync --locked`. PowerShell 7 is required only
-for the PowerShell provisioning script.
+Keep participant instructions in `challenges/` and matching solutions and assets
+in `walkthrough/`. Duplicate the numbered challenge/solution pair for each
+exercise, update navigation links, and adapt the [wrap-up page](challenges/finish.md).
+The supplied pages are authoring scaffolds, not finished participant exercises.
 
-Use `uv run python` for bootcamp exercises. The lockfile captures the latest
-stable `agent-framework` release available when this template was created. To
-upgrade later, run `uv lock --upgrade && uv sync --locked` and commit `uv.lock`.
-See the [official Python guide](https://github.com/microsoft/agent-framework/tree/main/python)
-for framework usage.
+Shared Azure resources and permissions live in `labautomation/main.bicep`.
+Both standalone provisioning and the managed-event hooks use that template.
+Keep downloaded data, credentials, and local deployment state out of Git.
 
-## Provision
+## Guides
 
-Sign in using `az login` (or `az login --use-device-code` in a headless
-environment). Your account needs subscription-level permissions to create
-resource groups, deployments, and role assignments, such as **Owner**, or
-**Contributor + Role Based Access Control Administrator** at subscription scope.
-Standalone provisioning uses the root `main.bicep` at subscription scope, which
-creates the group and calls the shared `labautomation/main.bicep` template.
-All services must be available in the selected region.
-
-**Bash** (Linux, macOS, or WSL):
-
-```bash
-./provision.sh
-# Optional overrides:
-./provision.sh --subscription "<subscription-id-or-name>" --location swedencentral
-# Grant another principal access (Entra object ID, not application/client ID):
-./provision.sh --principal-id "<object-id>"
-```
-
-**PowerShell 7**:
-
-```powershell
-./provision.ps1
-# Optional overrides:
-./provision.ps1 -Subscription "<subscription-id-or-name>" -Location swedencentral
-# Multiple participants:
-./provision.ps1 -PrincipalId "<object-id-1>", "<object-id-2>"
-```
-
-Both entry points require uv and run the same Python 3.13 provisioning/ingestion
-code, without installing the exercise dependencies. Without a subscription
-argument they use the current Azure CLI subscription, never changing its default.
-They print resource names and endpoints only after dataset ingestion succeeds.
-
-The first region is `westeurope` (or your override), followed by untried regions
-from `westeurope`, `swedencentral`, and `francecentral`. A new lab races up to
-three regions in parallel, each in `rg-foundry-bootcamp-<suffix>-<region>`. The
-first successful deployment wins: still-running attempts are cancelled, and every
-other group created by the race is deleted (with deletion verified and soft-deleted
-Foundry accounts purged) while the dataset loads into the winner. This briefly
-consumes up to three times the quota but reaches a single lab quickly. If every
-attempt hits capacity, regional quota, or unsupported-region errors, the next
-three regions are tried; if any failed with an RBAC, policy, template, or unknown
-error and none succeeded, that error is raised. **Pre-existing, untracked lab
-groups are never deployed into or deleted**; provisioning stops instead.
-
-The shared suffix is stored in `.provision/suffix`, and the successful region/group
-in `.provision/<subscription-id>-<suffix>.json`. Preserve both ignored files when
-moving machines to resume the same environment. Reruns keep the winning region,
-even if a different location is requested, and upsert the same ticket IDs. An
-ingestion failure leaves successful infrastructure in place for retry.
-An older `rg-foundry-bootcamp-<suffix>` group from the original template is
-detected and upgraded in place rather than creating a second lab.
-
-### Resources and access
-
-The shared template deploys a Foundry account/project, Search Basic (one replica,
-one partition), Standard LRS Storage with a private `it-support-tickets` container,
-and workspace-based Application Insights with a 30-day Log Analytics workspace.
-Search, Storage, and Application Insights connections are attached to the project.
-These are public-network lab endpoints with Entra authentication; Foundry/Search
-local keys, Storage shared keys/public blobs, and unauthenticated telemetry
-ingestion are disabled.
-
-Every supplied principal receives resource-group **Reader** for discovery, plus
-**Foundry User**, **Search Service Contributor**,
-**Search Index Data Contributor**, **Storage Blob Data Contributor**,
-**Monitoring Reader**, **Monitoring Metrics Publisher**, and **Log Analytics
-Reader**, scoped to the corresponding resources. The deployment identity receives
-the same access so it can seed the data, including when participants differ from
-the deployer. Foundry account/project managed identities receive Search
-schema/data, Blob data, and telemetry publishing access; Search's identity can
-read blobs.
-These assignments are deterministic and do not grant subscription ownership.
-Application Insights' connection stores its connection string in Foundry's
-credential store; exporters must still use an Entra credential for ingestion.
-
-### IT Support Tickets dataset
-
-Every successful deployment downloads **version 1** of Muhammad Ahsan's
-[`ahsanneural/synthetic-it-support-tickets`](https://www.kaggle.com/datasets/ahsanneural/synthetic-it-support-tickets)
-from Kaggle. It validates all **100,000 rows and 20 columns**, uploads the unchanged
-CSV plus `attribution.json` (creator, source, CC BY 4.0 license, version, SHA-256,
-row count, and transformation note), and loads all tickets into Search index
-`it-support-tickets`. All columns are retained; dates, nullable resolution times,
-and boolean flags are converted to Search types. Text is full-text searchable;
-metadata supports filtering. No embeddings/model quota is required.
-
-Indexing uses bounded batches and idempotent `mergeOrUpload`, checks per-document
-errors, waits for RBAC propagation and searchable document counts, and verifies a
-retrieval query before declaring success. This is a disposable lab index, not an
-import target for unrelated documents.
-
-If Kaggle requires interactive download in your environment, obtain version 1
-from the source page and pass `--dataset-csv "<path>"` (Bash) or
-`-DatasetCsv "<path>"` (PowerShell). Do not put Kaggle credentials or downloaded
-data in Git. For dataset-only retry, use the resource-group deployment name
-(`foundry-bootcamp` for standalone provisioning):
-
-```powershell
-uv run --no-project --python 3.13 python labautomation/environment.py seed `
-  --subscription "<subscription-id>" --resource-group "<printed-group>" `
-  --deployment-name foundry-bootcamp
-```
-
-## Cleanup
-
-Delete the group when finished, substituting its printed name:
-
-```bash
-az group delete --name "<printed-group>" --subscription "<subscription-id>"
-```
-
-This deletes **all resources in the group**, including anything added during the
-bootcamp. Keep `.provision/` to reuse the same name and region later. Remove it
-only when you intentionally want the next run to create a differently named
-group; removing it does not delete Azure resources. Foundry accounts are
-soft-deleted and may require recovery or purging before their names can be
-reused; follow Azure's error guidance if redeployment reports a name conflict.
-
-## Local checks
-
-```bash
-python3 -m unittest discover -s tests -v
-az bicep build --file main.bicep --stdout
-az bicep build --file labautomation/main.bicep --stdout
-```
-
-The tests mock Azure and HTTP operations and never deploy Azure resources.
-They test Bash on Unix and PowerShell when installed, including shared suffix
-state, participant permissions, hook failure handling, ingestion validation and
-regional fallback/cleanup. Template tests compile both deployment paths when
-`bicep` or `az bicep` is available. These checks do not replace live validation.
+- [Setup, deployment, permissions, dataset loading, and cleanup](docs/setup.md)
+- [Managed events and MicroHack platform integration](labautomation/README.md)
+- [Local checks](docs/setup.md#local-checks)
+- [Microsoft Agent Framework for Python](https://github.com/microsoft/agent-framework/tree/main/python)
